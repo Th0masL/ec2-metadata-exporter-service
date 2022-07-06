@@ -36,21 +36,21 @@ The default location for the config file is `/etc/ec2-metadata-exporter/config.j
 
 ```json
 {
-    // Name to give to the variable that will contains the name of your AWS Account
+    "//": "Name to give to the variable that will contains the name of your AWS Account",
     "aws_account_var_name": "ENV",
-    // ID<>Name of your AWS Accounts, based on the Account ID
+    "//": "ID<>Name of your AWS Accounts, based on the Account ID",
     "aws_accounts_id_name_map": "prod=123456789012;dev=234567890123",
-    // Allow to override the name of the CONTINENT variable
+    "//": "Allow to override the name of the CONTINENT variable",
     "continent_var_name": "CONTINENT",
-    // Custom prefix for the variables CLOUD, CONTINENT and REGION
+    "//": "Custom prefix for the variables CLOUD, CONTINENT and REGION",
     "custom_prefix": "",
-    // Allow to override the export location
+    "//": "Allow to override the export location",
     "export_to_path": "/etc/aws-ec2-metadata.env",
-    // Define how often the Metadata/Tags are refreshed
+    "//": "Define how often the Metadata/Tags are refreshed",
     "refresh_time_seconds": 60,
-    // Allow to override the name of the REGION variable
+    "//": "Allow to override the name of the REGION variable",
     "region_var_name": "REGION",
-    // Enable/disable the export of some static metadata variables
+    "//": "Enable/disable the export of some static metadata variables",
     "static_metadata_to_export": [
         "AWS_ACCOUNT_ID",
         "AWS_ACCOUNT_NAME",
