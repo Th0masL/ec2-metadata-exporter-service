@@ -4,7 +4,7 @@
     "continent_var_name": "CONTINENT",
     "custom_prefix": "",
     "export_to_path": "/etc/aws-ec2-metadata.env",
-    "refresh_time_seconds": 60
+    "refresh_time_seconds": 60,
     "region_var_name": "REGION",
     "static_metadata_to_export": [
         "AWS_ACCOUNT_ID",
@@ -14,6 +14,7 @@
         "AWS_INSTANCE_PROFILE_NAME",
         "AWS_INSTANCE_TYPE",
         "AWS_PRIVATE_IPV4",
+        "AWS_PUBLIC_IPV4",
         "CLOUD",
         "CONTINENT",
         "REGION",

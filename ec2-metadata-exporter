@@ -104,6 +104,7 @@ if __name__ == '__main__':
         # Export some static metadata that we don't need to refresh
         region = ec2_metadata.region
         private_ipv4 = ec2_metadata.private_ipv4
+        public_ipv4 = ec2_metadata.public_ipv4
         ami_id = ec2_metadata.ami_id
         instance_profile_name = ec2_metadata.instance_profile_name
         instance_type = ec2_metadata.instance_type
@@ -142,6 +143,8 @@ if __name__ == '__main__':
         static_metadata["AWS_INSTANCE_TYPE"] = instance_type
     if 'AWS_PRIVATE_IPV4' in static_metadata_to_export:
         static_metadata["AWS_PRIVATE_IPV4"] = private_ipv4
+    if 'AWS_PUBLIC_IPV4' in static_metadata_to_export:
+        static_metadata["AWS_PUBLIC_IPV4"] = public_ipv4
     if 'CLOUD' in static_metadata_to_export:
         static_metadata[custom_prefix + "CLOUD"] = "aws"
     if 'CONTINENT' in static_metadata_to_export:

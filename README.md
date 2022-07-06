@@ -1,8 +1,10 @@
 # ec2-metadata-exporter-service
 
-This Python script allows you to extract the Metadata and Tags from an AWS EC2 Instance and export them as Environment Variables into a file.
+This Python script is used to monitor and extract the Metadata and Tags from within an AWS EC2 Instance, and expose them to internal processes by exporting them to a local Environment Variables file.
 
-This file can then be loaded by other services, thus allowing the Metadata and Tags to be automatically passed to your Linux Services.
+The script keep running in the background to make sure that any changes to the EC2 Tags is being reflected in the local file.
+
+You can then use this local Environment Variable file in other Linux services and scripts, allowing dynamic control of your services and script by simply updating the values of the EC2 Tag.
 
 ## Requirements
 
@@ -44,7 +46,7 @@ The default location for the config file is `/etc/ec2-metadata-exporter/config.j
     "custom_prefix": "",
     // Allow to override the export location
     "export_to_path": "/etc/aws-ec2-metadata.env",
-    // Set how often the Metadata/Tags are refreshed
+    // Define how often the Metadata/Tags are refreshed
     "refresh_time_seconds": 60,
     // Allow to override the name of the REGION variable
     "region_var_name": "REGION",
@@ -57,6 +59,7 @@ The default location for the config file is `/etc/ec2-metadata-exporter/config.j
         "AWS_INSTANCE_PROFILE_NAME",
         "AWS_INSTANCE_TYPE",
         "AWS_PRIVATE_IPV4",
+        "AWS_PUBLIC_IPV4",
         "CLOUD",
         "CONTINENT",
         "REGION",
@@ -86,19 +89,27 @@ VCPU='2'
 
 ### How to pass those Environment Variables to another Service
 
-1. Let's imagine that your server is an HAProxy, and you want to inject the Environment Variables into the HAProxy process
+1. Let's imagine that your server is an HAProxy Server, and you want to inject the Environment Variables into the HAProxy process
 2. Edit the HAProxy Service file in `/lib/systemd/system/haproxy.service`
 3. Under the `[Service]` section:
     - Add the line `ExecStartPre=/usr/bin/test -f /etc/aws-ec2-metadata.env` to tell HAProxy that it cannot start as long as the file `/etc/aws-ec2-metadata.env` does not exist
     - Add the line `EnvironmentFile=/etc/aws-ec2-metadata.env` to tell HAProxy to load the Environment Variables from this file
+    - Add or edit the line `Restart` and set the value to `always`, to ensure that SYSTEMD keeps retrying if the file `/etc/aws-ec2-metadata.env` is not present just yet
 4. Save your changes and reload SYSTEMD Daemon with `systemctl daemon-reload`
 5. The values of the AWS EC2 Metadata and Tags are now available inside the HAProxy Process
 
-Note:
 
-You will have to do some additionnal SYSTEMD configuration if you want the HAProxy Process to be notified and reload automatically it's config when there are new Tags that gets added/removed/edited on the EC2 Instance.
+### Dynamic refresh/update of the EC2 Tags into the Environment Variables file
 
-For example, SYSTEMD is able to use a 'watcher' that triggers a reload of a specific service if a local file change.
+If you never update the EC2 Tags on running EC2 Instances, you don't really need to automatically refresh the list of EC2 Tags often at all, as the first Enviroment Variable that is generated when the service starts will already contains and export everything you want to export to the Environment Variable file.
+
+But if you update the EC2 Tags often, you definitely want to refresh the list of EC2 Tags every couple of minutes, to detect possible changes.
+
+And depending on the service you are injecting those Environment Variables into, you might have to do some additionnal SYSTEMD configuration if you want your service has to be notified and reload the new values of the Environment Variable file when then EC2 Tags were added/removed/edited.
+
+In order to do that, you can create a 'watcher' service that will monitor the file `/etc/aws-ec2-metadata.env` and automatically trigger a reload or a restart of another service when the Environment Variable file has been updated.
+
+See [this thread](https://superuser.com/questions/1171751/restart-systemd-service-automatically-whenever-a-directory-changes-any-file-ins) for more information about this approach.
 
 ### Overview of Syslog
 
@@ -108,8 +119,8 @@ For example, SYSTEMD is able to use a 'watcher' that triggers a reload of a spec
     > service ec2-metadata-exporter start
     > journalctl -u ec2-metadata-exporter
     Jul 06 08:05:29 ip-172-31-8-5 systemd[1]: Started Metadata Exporter Service for AWS EC2 Instances.
-    Jul 06 08:05:29 ip-172-31-8-5 ec2-metadata-exporter[5898]: Script starting, loading the configuration file /etc/ec2-metadata-exporter/config.json ...
-    Jul 06 08:05:30 ip-172-31-8-5 ec2-metadata-exporter[5898]: Creating the Env Var file /etc/aws-ec2-metadata.env for the first time. Found a total of 13 tags. Check frequency: 15 seconds.
+    Jul 06 08:05:29 ip-172-31-8-5 ec2-metadata-exporter[5898]: Script starting, loading the configuration from /etc/ec2-metadata-exporter/config.json ...
+    Jul 06 08:05:30 ip-172-31-8-5 ec2-metadata-exporter[5898]: Creating the Env Var file /etc/aws-ec2-metadata.env for the first time. Found a total of 13 tags. Check frequency: 60 seconds.
     <...>
     ```
 
