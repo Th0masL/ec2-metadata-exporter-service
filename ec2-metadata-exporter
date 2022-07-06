@@ -1,0 +1,236 @@
+
+#!/bin/env python3
+
+#################################################################
+#                                                               #
+#                 AWS EC2 Tags Exporter Script                  #
+#                                                               #
+#################################################################
+#                                                               #
+# Features:                                                     #
+# - Export EC2 Tags as Environment Variable into a file         #
+# - Infinite loop to run as a Linux Service (SYSTEMD)           #
+# - Support graceful kill signals                               #
+#                                                               #
+# Requirements:                                                 #
+# - ec2-metadata                                                #
+#   Website: https://github.com/adamchainz/ec2-metadata         #
+#   Install: pip3 install ec2-metadata                          #
+# - psutil                                                      #
+#   Install: pip3 install psutil                                #
+#                                                               #
+#################################################################
+
+import os
+import signal
+import time
+import re
+import psutil
+import json
+import sys
+from ec2_metadata import ec2_metadata
+
+# Graceful Signal Handling inspired from:
+# https://stackoverflow.com/questions/18499497/how-to-process-sigterm-signal-gracefully
+class GracefulKiller:
+    kill_now = False
+    def __init__(self):
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+    def exit_gracefully(self, *args):
+        self.kill_now = True
+
+if __name__ == '__main__':
+
+    #  Try to find the file config.json
+    if 'CONFIG_PATH' in os.environ:
+        config_path = os.environ['CONFIG_PATH']
+    elif os.path.exists("/etc/ec2-metadata-exporter/config.json"):
+        config_path = "/etc/ec2-metadata-exporter/config.json"
+    elif os.path.exists("config.json"):
+        config_path = "config.json"
+    else:
+        print("Error, unable to find the configuration file.")
+        sys.exit(1)
+
+    # Init vars
+    custom_prefix = ""
+    region_var_name = "REGION"
+    continent_var_name = "CONTINENT"
+    aws_account_var_name = ""
+    aws_accounts_id_name_map = ""
+    account_name = ""
+    msg_action = ""
+    last_msg_action = ""
+    all_tags = {}
+    static_metadata = {}
+    all_metadata_lines = []
+    next_check_in_seconds = 0
+    just_started = True
+    list_chars_to_remove = ["'", "\""]
+    pattern_chars_to_remove = '[' +  ''.join(list_chars_to_remove) +  ']'
+    refresh_time_seconds = "60"
+    export_to_path = "/etc/aws-ec2-metadata.env"
+    static_metadata_to_export = []
+
+    print("Script starting, loading the configuration from " + config_path + " ...")
+
+    # Open the JSON Config file
+    f = open(config_path)
+
+    # Returns the JSON config as a Dictionary
+    config = json.load(f)
+
+    # Read vars from the config, if found
+    if 'custom_prefix' in config:
+        custom_prefix = config['custom_prefix']
+    if 'region_var_name' in config:
+        region_var_name = config['region_var_name']
+    if 'continent_var_name' in config:
+        continent_var_name = config['continent_var_name']
+    if 'aws_account_var_name' in config:
+        aws_account_var_name = config['aws_account_var_name']
+    if 'aws_accounts_id_name_map' in config:
+        aws_accounts_id_name_map = config['aws_accounts_id_name_map']
+    if 'refresh_time_seconds' in config:
+        refresh_time_seconds = config['refresh_time_seconds']
+    if 'export_to_path' in config:
+        export_to_path = config['export_to_path']
+    if 'static_metadata_to_export' in config:
+        static_metadata_to_export = config['static_metadata_to_export']
+
+    try:
+        # Export some static metadata that we don't need to refresh
+        region = ec2_metadata.region
+        private_ipv4 = ec2_metadata.private_ipv4
+        ami_id = ec2_metadata.ami_id
+        instance_profile_name = ec2_metadata.instance_profile_name
+        instance_type = ec2_metadata.instance_type
+        instance_id = ec2_metadata.instance_id
+        account_id = ec2_metadata.account_id
+    except:
+        print("Unable to extract the static ec2_metadata values. Sleeping 10 seconds and exiting with error code 1.")
+        time.sleep(10)
+        sys.exit(1)
+
+    if aws_accounts_id_name_map != "":
+        # Try to find the AWS Account Name from the ID
+        for my_aws_account in aws_accounts_id_name_map.split(";"):
+            this_aws_account_details = my_aws_account.split("=")
+            this_aws_account_name = this_aws_account_details[0]
+            this_aws_account_id = this_aws_account_details[1]
+            if account_id == this_aws_account_id:
+                account_name = this_aws_account_name
+                break
+
+    # Get the CPU count
+    vcpu = psutil.cpu_count()
+
+    # Build some static metadata
+    if 'AWS_ACCOUNT_NAME' in static_metadata_to_export and account_name != "" and aws_account_var_name != "":
+        static_metadata[aws_account_var_name] = account_name
+    if 'AWS_ACCOUNT_ID' in static_metadata_to_export:
+        static_metadata["AWS_ACCOUNT_ID"] = account_id
+    if 'AWS_AMI_ID' in static_metadata_to_export:
+        static_metadata["AWS_AMI_ID"] = ami_id
+    if 'AWS_INSTANCE_ID' in static_metadata_to_export:
+        static_metadata["AWS_INSTANCE_ID"] = instance_id
+    if 'AWS_INSTANCE_PROFILE_NAME' in static_metadata_to_export and instance_profile_name is not None:
+        static_metadata["AWS_INSTANCE_PROFILE_NAME"] = instance_profile_name
+    if 'AWS_INSTANCE_TYPE' in static_metadata_to_export:
+        static_metadata["AWS_INSTANCE_TYPE"] = instance_type
+    if 'AWS_PRIVATE_IPV4' in static_metadata_to_export:
+        static_metadata["AWS_PRIVATE_IPV4"] = private_ipv4
+    if 'CLOUD' in static_metadata_to_export:
+        static_metadata[custom_prefix + "CLOUD"] = "aws"
+    if 'CONTINENT' in static_metadata_to_export:
+        static_metadata[custom_prefix + continent_var_name] = region.split("-")[0]
+    if 'REGION' in static_metadata_to_export:
+        static_metadata[custom_prefix + region_var_name] = region
+    if 'VCPU' in static_metadata_to_export:
+        static_metadata["VCPU"] = vcpu
+
+    # Run the Infinite While Loop
+    killer = GracefulKiller()
+    while not killer.kill_now:
+
+        # If it's time to check, do it
+        if next_check_in_seconds <= 0:
+            # Assume we will have tags to save
+            tags_to_save = True
+
+            # Get the ec2_metadata.tags
+            instance_tags = ec2_metadata.tags
+
+            # Loop in the tags and save them in a dict
+            for tag_name in instance_tags:
+                all_tags[str(tag_name).upper()] = re.sub(pattern_chars_to_remove, '', str(instance_tags[tag_name]))
+
+            # Define the Hostname from the Name
+            if 'HOSTNAME' not in all_tags and 'NAME' in all_tags:
+                all_tags["HOSTNAME"] = all_tags["NAME"]
+
+            # Convert the static_metadata into a multi-line list
+            for metadata_name in static_metadata:
+                all_metadata_lines.append(str(metadata_name) + "='" + str(static_metadata[metadata_name]) + "'")
+
+            # Convert the dict into a multi-lines list
+            for tag_name in all_tags:
+                if all_tags[str(tag_name)] is not None:
+                    all_metadata_lines.append(str(tag_name) + "='" + str(all_tags[tag_name]) + "'")
+                else:
+                    all_metadata_lines.append(str(tag_name) + "=''")
+
+            # Sort the metadata list
+            all_metadata_lines.sort()
+
+            # Define the expected file content
+            expected_file_content = "\n".join(all_metadata_lines) + "\n"
+
+            # If the file exist, check if we need to update the content
+            if os.path.exists(export_to_path):
+                # Extract the existing content of the file
+                with open(export_to_path) as f:
+                    existing_lines = f.readlines()
+                existing_file_content = "".join(existing_lines)
+                # Check if we need to update th content or not
+                if expected_file_content == existing_file_content:
+                    to_update = False
+                    msg = "Already up-to-date, no need to update the Env Var file " + export_to_path + ". Found a total of " + str(len(all_metadata_lines)) + " tags."
+                else:
+                    to_update = True
+                    msg = "Changes detected, updating the Env Var file " + export_to_path + ". Found a total of " + str(len(all_metadata_lines)) + " tags."
+            else:
+                to_update = True
+                msg = "Creating the Env Var file " + export_to_path + " for the first time. Found a total of " + str(len(all_metadata_lines)) + " tags."
+
+            # Create/update the file (atomically)
+            if to_update == True:
+                # Create a temporary file
+                f = open(export_to_path + ".tmp", "w")
+                f.write(expected_file_content)
+                f.flush()
+                os.fsync(f.fileno())
+                f.close()
+                # Atomic write by moving the file to the final location
+                os.rename(export_to_path + ".tmp", export_to_path)
+
+            # Eventually show a message about the state
+            if to_update == True or (to_update == False and just_started == True):
+                print(msg + " Check frequency: " + str(refresh_time_seconds) + " seconds.")
+                just_started = False
+
+            # Clean the variables and cache, so the next loop has a clean start
+            all_tags.clear()
+            all_metadata_lines.clear()
+            del ec2_metadata.tags
+
+            # Set we waiting time before the next loop
+            next_check_in_seconds = refresh_time_seconds
+
+        else: # Decrement the waiting time
+            time.sleep(1)
+            next_check_in_seconds -= 1
+
+    print("Received kill signal. Exiting gracefully.")

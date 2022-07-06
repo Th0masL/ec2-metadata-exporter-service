@@ -1,0 +1,21 @@
+[Unit]
+Description=Metadata Exporter Service for AWS EC2 Instances
+Documentation=https://github.com/Th0masL/ec2-metadata-exporter-service
+After=network-online.target rsyslog.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=root
+Group=root
+WorkingDirectory=/etc/ec2-metadata-exporter
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /usr/local/bin/ec2-metadata-exporter
+ExecReload=/bin/kill -HUP $MAINPID
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=ec2-metadata-exporter
+
+[Install]
+WantedBy=multi-user.target
