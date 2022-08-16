@@ -56,6 +56,9 @@ if __name__ == '__main__':
 
     # Init vars
     custom_prefix = ""
+    hostname_var_name = "HOSTNAME"
+    custom_var_name = ""
+    custom_var_value = ""
     region_var_name = "REGION"
     continent_var_name = "CONTINENT"
     aws_account_var_name = ""
@@ -85,6 +88,12 @@ if __name__ == '__main__':
     # Read vars from the config, if found
     if 'custom_prefix' in config:
         custom_prefix = config['custom_prefix']
+    if 'hostname_var_name' in config:
+        hostname_var_name = config['hostname_var_name']
+    if 'custom_var_name' in config:
+        custom_var_name = config['custom_var_name']
+    if 'custom_var_pattern' in config:
+        custom_var_value = config['custom_var_pattern']
     if 'region_var_name' in config:
         region_var_name = config['region_var_name']
     if 'continent_var_name' in config:
@@ -94,7 +103,7 @@ if __name__ == '__main__':
     if 'aws_accounts_id_name_map' in config:
         aws_accounts_id_name_map = config['aws_accounts_id_name_map']
     if 'refresh_time_seconds' in config:
-        refresh_time_seconds = config['refresh_time_seconds']
+        refresh_time_seconds = int(config['refresh_time_seconds'])
     if 'export_to_path' in config:
         export_to_path = config['export_to_path']
     if 'static_metadata_to_export' in config:
@@ -168,11 +177,32 @@ if __name__ == '__main__':
 
             # Loop in the tags and save them in a dict
             for tag_name in instance_tags:
-                all_tags[str(tag_name).upper()] = re.sub(pattern_chars_to_remove, '', str(instance_tags[tag_name]))
+                tag_name_clean = str(tag_name).replace(":", "_")
+                all_tags[tag_name_clean.upper()] = re.sub(pattern_chars_to_remove, '', str(instance_tags[tag_name]))
 
             # Define the Hostname from the Name
-            if 'HOSTNAME' not in all_tags and 'NAME' in all_tags:
-                all_tags["HOSTNAME"] = all_tags["NAME"]
+            if hostname_var_name not in all_tags and 'NAME' in all_tags:
+                all_tags[hostname_var_name] = all_tags["NAME"]
+
+            # If there's a Custom Variable to create, try to populate it with the existing Metadata Values
+            if custom_var_name != "" and custom_var_value != "":
+                # Init var
+                custom_var_value_lines_new = []
+                # Split the variable into multi-lines so we can inject dynamic content correctly
+                custom_var_value_lines = custom_var_value.split("-")
+                for line in custom_var_value_lines:
+                    for metadata_name in static_metadata:
+                        metadata_value = str(static_metadata[metadata_name])
+                        if metadata_name == "AWS_INSTANCE_ID": # If AWS_INSTANCE_ID, remove the '-'
+                            metadata_value = metadata_value.replace("-", "")
+                        if line == metadata_name:
+                            custom_var_value_lines_new.append(metadata_value)
+                    for tag_name in all_tags:
+                        tag_value = str(all_tags[tag_name])
+                        if line == tag_name:
+                            custom_var_value_lines_new.append(tag_value)
+                # Save the result in a new variable
+                all_tags[custom_var_name] = "-".join(custom_var_value_lines_new)
 
             # Convert the static_metadata into a multi-line list
             for metadata_name in static_metadata:
