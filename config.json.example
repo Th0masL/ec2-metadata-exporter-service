@@ -3,7 +3,10 @@
     "aws_accounts_id_name_map": "prod=123456789012;dev=234567890123",
     "continent_var_name": "CONTINENT",
     "custom_prefix": "",
+    "custom_var_name": "NODE_ID",
+    "custom_var_pattern": "AWS_ACCOUNT_NAME-REGION-AWS_INSTANCE_ID",
     "export_to_path": "/etc/aws-ec2-metadata.env",
+    "hostname_var_name": "",
     "refresh_time_seconds": 60,
     "region_var_name": "REGION",
     "static_metadata_to_export": [
