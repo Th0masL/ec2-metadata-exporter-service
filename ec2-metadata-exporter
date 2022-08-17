@@ -59,7 +59,9 @@ if __name__ == '__main__':
     custom_var_name = ""
     custom_var_value = ""
     region_var_name = "REGION"
-    continent_var_name = "CONTINENT"
+    global_region_var_name = "GLOBAL_REGION"
+    greater_region_var_name = "GREATER_REGION"
+    cpu_count_var_name = "CPU_COUNT"
     aws_account_var_name = ""
     aws_accounts_id_name_map = ""
     account_name = ""
@@ -73,7 +75,8 @@ if __name__ == '__main__':
     list_chars_to_remove = ["'", "\""]
     pattern_chars_to_remove = '[' +  ''.join(list_chars_to_remove) +  ']'
     refresh_time_seconds = "60"
-    export_to_path = "/etc/aws-ec2-metadata.env"
+    export_to_folder_path = "/var/run/aws-context"
+    export_to_file_name = "context.sh"
     static_metadata_to_export = []
 
     print("Script starting, loading the configuration from " + config_path + " ...")
@@ -95,16 +98,22 @@ if __name__ == '__main__':
         custom_var_value = config['custom_var_pattern']
     if 'region_var_name' in config:
         region_var_name = config['region_var_name']
-    if 'continent_var_name' in config:
-        continent_var_name = config['continent_var_name']
+    if 'greater_region_var_name' in config:
+        greater_region_var_name = config['greater_region_var_name']
+    if 'global_region_var_name' in config:
+        global_region_var_name = config['global_region_var_name']
     if 'aws_account_var_name' in config:
         aws_account_var_name = config['aws_account_var_name']
     if 'aws_accounts_id_name_map' in config:
         aws_accounts_id_name_map = config['aws_accounts_id_name_map']
     if 'refresh_time_seconds' in config:
         refresh_time_seconds = int(config['refresh_time_seconds'])
-    if 'export_to_path' in config:
-        export_to_path = config['export_to_path']
+    if 'export_to_folder_path' in config:
+        export_to_folder_path = config['export_to_folder_path']
+    if 'export_to_file_name' in config:
+        export_to_file_name = config['export_to_file_name']
+    if 'cpu_count_var_name' in config:
+        cpu_count_var_name = config['cpu_count_var_name']
     if 'static_metadata_to_export' in config:
         static_metadata_to_export = config['static_metadata_to_export']
 
@@ -123,6 +132,13 @@ if __name__ == '__main__':
         time.sleep(10)
         sys.exit(1)
 
+    # Eventually create the folder where we will export the variables
+    if not os.path.exists(export_to_folder_path):
+        os.mkdir(export_to_folder_path, 0o770)
+
+    # Define the expect full path to export the variables
+    export_to_full_path = export_to_folder_path.rstrip("/") + "/" + export_to_file_name.strip("/")
+
     if aws_accounts_id_name_map != "":
         # Try to find the AWS Account Name from the ID
         for my_aws_account in aws_accounts_id_name_map.split(";"):
@@ -134,7 +150,7 @@ if __name__ == '__main__':
                 break
 
     # Get the CPU count
-    vcpu = psutil.cpu_count()
+    cpu_count = psutil.cpu_count()
 
     # Build some static metadata
     if 'AWS_ACCOUNT_NAME' in static_metadata_to_export and account_name != "" and aws_account_var_name != "":
@@ -155,12 +171,14 @@ if __name__ == '__main__':
         static_metadata["AWS_PUBLIC_IPV4"] = public_ipv4
     if 'CLOUD' in static_metadata_to_export:
         static_metadata[custom_prefix + "CLOUD"] = "aws"
-    if 'CONTINENT' in static_metadata_to_export:
-        static_metadata[custom_prefix + continent_var_name] = region.split("-")[0]
+    if 'GLOBAL_REGION' in static_metadata_to_export:
+        static_metadata[custom_prefix + global_region_var_name] = region.split("-")[0]
+    if 'GREATER_REGION' in static_metadata_to_export:
+        static_metadata[custom_prefix + greater_region_var_name] = region.split("-")[0] + "-" + region.split("-")[1]
     if 'REGION' in static_metadata_to_export:
         static_metadata[custom_prefix + region_var_name] = region
-    if 'VCPU' in static_metadata_to_export:
-        static_metadata["VCPU"] = vcpu
+    if 'CPU_COUNT' in static_metadata_to_export:
+        static_metadata[cpu_count_var_name] = cpu_count
 
     # Run the Infinite While Loop
     killer = GracefulKiller()
@@ -221,32 +239,32 @@ if __name__ == '__main__':
             expected_file_content = "\n".join(all_metadata_lines) + "\n"
 
             # If the file exist, check if we need to update the content
-            if os.path.exists(export_to_path):
+            if os.path.exists(export_to_full_path):
                 # Extract the existing content of the file
-                with open(export_to_path) as f:
+                with open(export_to_full_path) as f:
                     existing_lines = f.readlines()
                 existing_file_content = "".join(existing_lines)
                 # Check if we need to update th content or not
                 if expected_file_content == existing_file_content:
                     to_update = False
-                    msg = "Already up-to-date, no need to update the Env Var file " + export_to_path + ". Found a total of " + str(len(all_metadata_lines)) + " tags."
+                    msg = "Already up-to-date, no need to update the Env Var file " + export_to_full_path + ". Found a total of " + str(len(all_metadata_lines)) + " tags."
                 else:
                     to_update = True
-                    msg = "Changes detected, updating the Env Var file " + export_to_path + ". Found a total of " + str(len(all_metadata_lines)) + " tags."
+                    msg = "Changes detected, updating the Env Var file " + export_to_full_path + ". Found a total of " + str(len(all_metadata_lines)) + " tags."
             else:
                 to_update = True
-                msg = "Creating the Env Var file " + export_to_path + " for the first time. Found a total of " + str(len(all_metadata_lines)) + " tags."
+                msg = "Creating the Env Var file " + export_to_full_path + " for the first time. Found a total of " + str(len(all_metadata_lines)) + " tags."
 
             # Create/update the file (atomically)
             if to_update == True:
                 # Create a temporary file
-                f = open(export_to_path + ".tmp", "w")
+                f = open(export_to_full_path + ".tmp", "w")
                 f.write(expected_file_content)
                 f.flush()
                 os.fsync(f.fileno())
                 f.close()
                 # Atomic write by moving the file to the final location
-                os.rename(export_to_path + ".tmp", export_to_path)
+                os.rename(export_to_full_path + ".tmp", export_to_full_path)
 
             # Eventually show a message about the state
             if to_update == True or (to_update == False and just_started == True):

@@ -1,14 +1,17 @@
 {
     "aws_account_var_name": "ENV",
     "aws_accounts_id_name_map": "prod=123456789012;dev=234567890123",
-    "continent_var_name": "CONTINENT",
+    "global_region_var_name": "GLOBAL_REGION",
+    "greater_region_var_name": "GREATER_REGION",
     "custom_prefix": "",
     "custom_var_name": "NODE_ID",
     "custom_var_pattern": "AWS_ACCOUNT_NAME-REGION-AWS_INSTANCE_ID",
-    "export_to_path": "/etc/aws-ec2-metadata.env",
+    "export_to_folder_path": "/var/run/aws-context",
+    "export_to_file_name": "context.sh",
     "hostname_var_name": "",
     "refresh_time_seconds": 60,
     "region_var_name": "REGION",
+    "cpu_count_var_name": "CPU_COUNT",
     "static_metadata_to_export": [
         "AWS_ACCOUNT_ID",
         "AWS_ACCOUNT_NAME",
@@ -19,8 +22,9 @@
         "AWS_PRIVATE_IPV4",
         "AWS_PUBLIC_IPV4",
         "CLOUD",
-        "CONTINENT",
+        "GLOBAL_REGION",
+        "GREATER_REGION",
         "REGION",
-        "VCPU"
+        "CPU_COUNT"
     ]
 }
