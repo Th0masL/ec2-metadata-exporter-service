@@ -22,7 +22,8 @@
         "AWS_PRIVATE_IPV4",
         "AWS_PUBLIC_IPV4",
         "CLOUD",
-        "CONTINENT",
+        "GLOBAL_REGION",
+        "GREATER_REGION",
         "REGION",
         "CPU_COUNT"
     ]
