@@ -223,7 +223,9 @@ if __name__ == '__main__':
 
             # Convert the static_metadata into a multi-line list
             for metadata_name in static_metadata:
-                all_metadata_lines.append(str(metadata_name) + "='" + str(static_metadata[metadata_name]) + "'")
+                # Use the Metadata value only if it does not yet exist as a Tag
+                if str(metadata_name) not in all_tags:
+                    all_metadata_lines.append(str(metadata_name) + "='" + str(static_metadata[metadata_name]) + "'")
 
             # Convert the dict into a multi-lines list
             for tag_name in all_tags:
